@@ -13,6 +13,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // Clear loading message
       activitiesList.innerHTML = "";
 
+      // Clear previous activity options (keep the default option)
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
+
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
@@ -24,7 +27,16 @@ document.addEventListener("DOMContentLoaded", () => {
           details.participants.length > 0
             ? `<ul class="participants-list">
                  ${details.participants
-                   .map((participant) => `<li>${participant}</li>`)
+                   .map((participant) => `
+                     <li>
+                       <span class="participant-email">${participant}</span>
+                       <button class="delete-participant-btn" 
+                               data-activity="${name}" 
+                               data-email="${participant}">
+                         ×
+                       </button>
+                     </li>
+                   `)
                    .join("")}
                </ul>`
             : '<p class="no-participants">No participants yet</p>';
@@ -47,6 +59,11 @@ document.addEventListener("DOMContentLoaded", () => {
         option.value = name;
         option.textContent = name;
         activitySelect.appendChild(option);
+      });
+
+      // Add event listeners for delete buttons
+      document.querySelectorAll('.delete-participant-btn').forEach(button => {
+        button.addEventListener('click', handleDeleteParticipant);
       });
     } catch (error) {
       activitiesList.innerHTML =
@@ -93,6 +110,49 @@ document.addEventListener("DOMContentLoaded", () => {
       showMessage("Failed to sign up. Please try again.", "error");
     }
   });
+
+  // Handle participant deletion
+  async function handleDeleteParticipant(event) {
+    const button = event.target;
+    const activity = button.dataset.activity;
+    const email = button.dataset.email;
+
+    if (!confirm(`Are you sure you want to remove ${email} from ${activity}?`)) {
+      return;
+    }
+
+    // Disable button during request
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = '...';
+
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activity)}/participants/${encodeURIComponent(email)}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        showMessage(result.message, "success");
+        fetchActivities(); // Refresh the activities list
+      } else {
+        const error = await response.json();
+        showMessage(error.detail || "Failed to remove participant", "error");
+        // Re-enable button on error
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    } catch (error) {
+      console.error("Error removing participant:", error);
+      showMessage("Failed to remove participant. Please try again.", "error");
+      // Re-enable button on error
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
 
   function showMessage(text, type) {
     messageDiv.textContent = text;
